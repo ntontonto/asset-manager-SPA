@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Household Analytics Dashboard</title>
+    
+    <!-- 1. Technical Stack & Libraries (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <!-- CSV Parser -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <!-- Excel Parser (SheetJS) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- Fonts & Global Styles -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+        
+        html {
+            scroll-behavior: smooth; /* Smooth scroll for anchor links */
+        }
+
+        body { 
+            font-family: 'Inter', 'Noto Sans JP', sans-serif; 
+            background-color: #f8fafc; 
+            color: #1e293b;
+            overflow-x: hidden;
+        }
+        
+        .app-container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            width: 100%; 
+            padding: 1rem; 
+        }
+
+        .chart-card { 
+            background: white; 
+            border-radius: 1rem; 
+            border: 1px solid #e2e8f0; 
+            padding: 1.25rem; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+            display: flex; 
+            flex-direction: column; 
+            width: 100%; 
+            overflow: hidden; 
+            transition: transform 0.2s;
+            break-inside: avoid;
+            /* Offset for sticky header when scrolling to ID */
+            scroll-margin-top: 140px; 
+        }
+        .chart-card:hover {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .chart-container { 
+            position: relative; 
+            width: 100%; 
+            transition: height 0.3s ease; 
+        }
+        
+        /* Layout Modes */
+        .cols-1 .chart-container { height: 420px; }
+        .cols-2 .chart-container { height: 280px; }
+
+        .dashboard-grid { 
+            display: grid; 
+            gap: 1.5rem; 
+            width: 100%; 
+        }
+        .cols-1 { grid-template-columns: 1fr; }
+        .cols-2 { grid-template-columns: repeat(2, 1fr); }
+        
+        @media (max-width: 768px) { 
+            .cols-2 { grid-template-columns: 1fr; } 
+            .cols-2 .chart-container { height: 350px; }
+        }
+
+        /* Navigation Tiles */
+        .nav-tile {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            transition: all 0.2s;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+        }
+        .nav-tile:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+        .nav-tile-icon {
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Professional AI Insight Styling */
+        .prose-ai { font-size: 0.95rem; line-height: 1.7; color: #334155; }
+        .prose-ai h1 { font-size: 1.5rem; font-weight: 800; margin: 1.5rem 0 1rem; color: #1e3a8a; border-left: 4px solid #2563eb; padding-left: 0.75rem;}
+        .prose-ai h2 { font-size: 1.25rem; font-weight: 700; margin: 1.25rem 0 0.75rem; color: #1e40af; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.25rem; }
+        .prose-ai h3 { font-size: 1.1rem; font-weight: 700; margin: 1rem 0 0.5rem; color: #2563eb; display: flex; align-items: center; gap: 0.5rem;}
+        .prose-ai h3::before { content: "■"; font-size: 0.8em; color: #60a5fa; }
+        .prose-ai ul { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 1rem; }
+        .prose-ai li { margin-bottom: 0.25rem; }
+        .prose-ai strong, .prose-ai b { 
+            color: #1e3a8a; 
+            font-weight: 800; 
+            background: linear-gradient(transparent 60%, #bfdbfe 60%); 
+            padding-left: 2px;
+            padding-right: 2px;
+            border-radius: 2px;
+        }
+        .prose-ai table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; border: 1px solid #e2e8f0; }
+        .prose-ai th { background: #f8fafc; padding: 0.75rem; border: 1px solid #cbd5e1; text-align: left; font-weight: 600; color: #475569;}
+        .prose-ai td { padding: 0.75rem; border: 1px solid #cbd5e1; background: white; }
+        .prose-ai tr:nth-child(even) td { background: #f9fafb; }
+
+        .loading-overlay { background: rgba(255, 255, 255, 0.92); backdrop-filter: blur(4px); }
+        #appHeader.hidden { display: none; }
+        header { position: sticky; top: 0; z-index: 50; transition: all 0.3s; }
+        
+        .filter-scroll::-webkit-scrollbar { height: 4px; }
+        .filter-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+        .splash-screen {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .splash-screen.hidden { display: none; }
+
+        /* Custom Scrollbar for horizontal scrolling in sticky nav if needed */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 z-[100] flex flex-col items-center justify-center hidden loading-overlay">
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mb-4"></div>
+        <p class="text-lg font-bold text-slate-700 animate-pulse" id="loadingText">システムを起動中...</p>
+    </div>
+
+    <!-- Initial Splash Screen -->
+    <div id="initialSplash" class="splash-screen">
+        <div class="text-center p-10 max-w-lg w-full">
+            <div class="mb-8 flex justify-center">
+                <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100">
+                    <i data-lucide="piggy-bank" class="w-20 h-20 text-rose-500"></i>
+                </div>
+            </div>
+            <h1 class="text-3xl font-extrabold text-slate-800 mb-3 tracking-tight">Household Analytics Dashboard</h1>
+            <p class="text-slate-500 mb-10 font-medium">家計・個人・資産の3層構造分析。<br>高度なAIがあなたの資産形成をサポートします。</p>
+            
+            <label class="group relative flex items-center justify-center gap-4 w-full bg-rose-600 hover:bg-rose-700 text-white text-lg font-bold py-5 px-8 rounded-2xl cursor-pointer transition-all shadow-lg hover:shadow-rose-500/30 active:scale-[0.98] overflow-hidden">
+                <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                <i data-lucide="upload-cloud" class="w-7 h-7 relative z-10"></i>
+                <span class="relative z-10">データを読み込む (Excel / CSV)</span>
+                <input type="file" id="csvFileInputSplash" class="hidden" accept=".csv, .xlsx, .xls">
+            </label>
+        </div>
+    </div>
+
+    <!-- Compact Header -->
+    <header id="appHeader" class="bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm sticky top-0 z-50 hidden transition-all duration-300">
+        <div class="max-w-[1200px] mx-auto px-4 py-2">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-2 px-3 py-1.5 bg-rose-600 text-white rounded-md hover:bg-rose-700 text-xs font-bold cursor-pointer transition-all shadow-sm active:scale-95 whitespace-nowrap">
+                        <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                        <span>ファイル再読込</span>
+                        <input type="file" id="csvFileInputHeader" class="hidden" accept=".csv, .xlsx, .xls">
+                    </label>
+                    <button id="btnExportPdf" class="flex items-center gap-2 px-3 py-1.5 bg-slate-700 text-white rounded-md hover:bg-slate-600 text-xs font-bold transition-all shadow-sm active:scale-95 hidden whitespace-nowrap">
+                        <i data-lucide="file-down" class="w-3.5 h-3.5"></i>
+                        <span>PDF保存</span>
+                    </button>
+                    <button id="btnExportJson" class="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 text-white rounded-md hover:bg-emerald-500 text-xs font-bold transition-all shadow-sm active:scale-95 hidden whitespace-nowrap">
+                        <i data-lucide="file-json" class="w-3.5 h-3.5"></i>
+                        <span>JSON保存</span>
+                    </button>
+                </div>
+
+                <div id="controlPanel" class="flex flex-wrap items-center gap-2 flex-1 justify-end">
+                    <div class="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-md border border-slate-200" id="filterContainer">
+                        <i data-lucide="calendar" class="w-3 h-3 text-slate-400"></i>
+                        <div class="flex items-center gap-1">
+                            <input type="month" id="filterDateStart" class="bg-transparent text-[10px] font-semibold focus:outline-none w-[75px] text-slate-600">
+                            <span class="text-slate-300">-</span>
+                            <input type="month" id="filterDateEnd" class="bg-transparent text-[10px] font-semibold focus:outline-none w-[75px] text-slate-600">
+                        </div>
+                    </div>
+                    <div class="flex items-center bg-slate-100 p-0.5 rounded-md border border-slate-200 ml-1">
+                        <button id="btnLayout1" class="p-1 rounded bg-white shadow-sm text-rose-600 transition-all" title="1列">
+                            <i data-lucide="layout-list" class="w-3.5 h-3.5"></i>
+                        </button>
+                        <button id="btnLayout2" class="p-1 rounded text-slate-400 hover:text-slate-600 transition-all" title="2列">
+                            <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Sticky Navigation (Initially Hidden) -->
+    <nav id="stickyNav" class="fixed top-[57px] left-0 right-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all duration-300 transform -translate-y-[150%] opacity-0 pointer-events-none">
+        <div class="max-w-[1200px] mx-auto px-4 py-2">
+            <div class="flex items-center justify-center gap-1 md:gap-4 overflow-x-auto no-scrollbar">
+                <a href="#c1" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full hover:bg-emerald-50 transition-colors group text-slate-600 hover:text-emerald-700 whitespace-nowrap">
+                    <i data-lucide="trending-up" class="w-4 h-4 text-emerald-500 group-hover:text-emerald-600"></i>
+                    <span class="text-xs font-bold">家計資産</span>
+                </a>
+                <a href="#c3" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full hover:bg-orange-50 transition-colors group text-slate-600 hover:text-orange-700 whitespace-nowrap">
+                    <i data-lucide="pie-chart" class="w-4 h-4 text-orange-500 group-hover:text-orange-600"></i>
+                    <span class="text-xs font-bold">内訳</span>
+                </a>
+                <a href="#c7" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full hover:bg-violet-50 transition-colors group text-slate-600 hover:text-violet-700 whitespace-nowrap">
+                    <i data-lucide="users" class="w-4 h-4 text-violet-500 group-hover:text-violet-600"></i>
+                    <span class="text-xs font-bold">比較</span>
+                </a>
+                <a href="#c9" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full hover:bg-blue-50 transition-colors group text-slate-600 hover:text-blue-700 whitespace-nowrap">
+                    <i data-lucide="user" class="w-4 h-4 text-blue-500 group-hover:text-blue-600"></i>
+                    <span class="text-xs font-bold">Partner 1</span>
+                </a>
+                <a href="#c13" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full hover:bg-rose-50 transition-colors group text-slate-600 hover:text-rose-700 whitespace-nowrap">
+                    <i data-lucide="user" class="w-4 h-4 text-rose-500 group-hover:text-rose-600"></i>
+                    <span class="text-xs font-bold">Partner 2</span>
+                </a>
+                <a href="#c17" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full hover:bg-slate-100 transition-colors group text-slate-600 hover:text-slate-800 whitespace-nowrap">
+                    <i data-lucide="arrow-left-right" class="w-4 h-4 text-slate-500 group-hover:text-slate-600"></i>
+                    <span class="text-xs font-bold">精算</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="app-container py-6">
+        <div id="dashboardContent" class="hidden space-y-6">
+            
+            <!-- Quick Navigation Tiles -->
+            <nav id="quickNav" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6 scroll-mt-20">
+                <a href="#c1" class="nav-tile group">
+                    <div class="nav-tile-icon bg-emerald-100 text-emerald-600">
+                        <i data-lucide="trending-up" class="w-5 h-5"></i>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase">Household</span>
+                        <span class="text-xs font-bold text-slate-700 group-hover:text-emerald-700">家計資産・収支</span>
+                    </div>
+                </a>
+                <a href="#c3" class="nav-tile group">
+                    <div class="nav-tile-icon bg-orange-100 text-orange-600">
+                        <i data-lucide="pie-chart" class="w-5 h-5"></i>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase">Breakdown</span>
+                        <span class="text-xs font-bold text-slate-700 group-hover:text-orange-700">支出内訳詳細</span>
+                    </div>
+                </a>
+                <a href="#c7" class="nav-tile group">
+                    <div class="nav-tile-icon bg-violet-100 text-violet-600">
+                        <i data-lucide="users" class="w-5 h-5"></i>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase">Compare</span>
+                        <span class="text-xs font-bold text-slate-700 group-hover:text-violet-700">パートナー比較</span>
+                    </div>
+                </a>
+                <a href="#c9" class="nav-tile group">
+                    <div class="nav-tile-icon bg-blue-100 text-blue-600">
+                        <i data-lucide="user" class="w-5 h-5"></i>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase">Partner 1</span>
+                        <span class="text-xs font-bold text-slate-700 group-hover:text-blue-700">Partner 1 Analysis</span>
+                    </div>
+                </a>
+                <a href="#c13" class="nav-tile group">
+                    <div class="nav-tile-icon bg-rose-100 text-rose-600">
+                        <i data-lucide="user" class="w-5 h-5"></i>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase">Partner 2</span>
+                        <span class="text-xs font-bold text-slate-700 group-hover:text-rose-700">Partner 2 Analysis</span>
+                    </div>
+                </a>
+                <a href="#c17" class="nav-tile group">
+                    <div class="nav-tile-icon bg-slate-100 text-slate-600">
+                        <i data-lucide="arrow-left-right" class="w-5 h-5"></i>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase">Settlement</span>
+                        <span class="text-xs font-bold text-slate-700 group-hover:text-slate-900">精算・資産比率</span>
+                    </div>
+                </a>
+            </nav>
+
+            <!-- KPI Cards -->
+            <section id="kpiSection" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i data-lucide="wallet" class="w-16 h-16 text-emerald-600"></i>
+                    </div>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">総資産残高</p>
+                    <h3 id="kpi-assets" class="text-xl font-extrabold text-emerald-600 tracking-tight">-</h3>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i data-lucide="arrow-up-circle" class="w-16 h-16 text-blue-600"></i>
+                    </div>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">家計収入 (期間計)</p>
+                    <h3 id="kpi-income" class="text-xl font-extrabold text-slate-800 tracking-tight">-</h3>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i data-lucide="arrow-down-circle" class="w-16 h-16 text-rose-600"></i>
+                    </div>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">家計支出 (期間計)</p>
+                    <h3 id="kpi-expense" class="text-xl font-extrabold text-slate-800 tracking-tight">-</h3>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i data-lucide="piggy-bank" class="w-16 h-16 text-orange-600"></i>
+                    </div>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">期間収支 (黒字額)</p>
+                    <h3 id="kpi-balance" class="text-xl font-extrabold text-slate-800 tracking-tight">-</h3>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i data-lucide="trending-up" class="w-16 h-16 text-indigo-600"></i>
+                    </div>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">平均貯蓄率</p>
+                    <h3 id="kpi-rate" class="text-xl font-extrabold text-slate-800 tracking-tight">-</h3>
+                </div>
+            </section>
+
+            <!-- Charts Grid -->
+            <section id="chartsGrid" class="dashboard-grid cols-1">
+                <!-- Charts generated by JS -->
+            </section>
+
+            <!-- AI Insight Section -->
+            <section id="aiSection" class="bg-white rounded-xl border border-rose-100 shadow-sm overflow-hidden relative">
+                <div class="bg-rose-50/50 px-5 py-3 border-b border-rose-100 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="bg-rose-600 text-white p-1 rounded shadow-sm">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                        </div>
+                        <h2 class="text-sm font-bold text-rose-900">AI 家計・資産戦略レポート</h2>
+                    </div>
+                    <div id="aiStatusBadge" class="flex items-center gap-2 px-2 py-0.5 bg-white rounded-full border border-rose-100 shadow-sm text-[10px] font-bold text-rose-600">
+                        <span class="relative flex h-1.5 w-1.5">
+                          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                          <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500"></span>
+                        </span>
+                        Thinking...
+                    </div>
+                </div>
+                <div class="p-6 min-h-[150px]">
+                    <div id="aiContent" class="prose-ai">
+                        <div class="flex flex-col items-center justify-center h-24 text-slate-400 gap-2">
+                            <i data-lucide="brain-circuit" class="w-8 h-8 opacity-20"></i>
+                            <p class="text-xs font-medium">データを分析中...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Footer Analysis -->
+            <section class="bg-slate-800 text-slate-300 rounded-xl p-6 text-center mt-8">
+                <p class="text-xs opacity-80">
+                    Household Analytics Dashboard
+                </p>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        // --- 1. Configuration & State ---
+        
+        // Partner Names Configuration - Change these to match your data file
+        const PARTNER_CONFIG = {
+            partner1: {
+                name: 'k',           // Column name in Excel/CSV (e.g., 'k', 'kanta', 'john')
+                displayName: 'Partner 1', // Display name in charts
+                color: '#2563eb'     // Blue - Chart color
+            },
+            partner2: {
+                name: 'm',           // Column name in Excel/CSV (e.g., 'm', 'masayuki', 'jane')
+                displayName: 'Partner 2', // Display name in charts
+                color: '#e11d48'     // Rose - Chart color
+            }
+        };
+        
+        const apiKey = ""; 
+        
+        let rawData = [];
+        let filteredData = [];
+        let charts = {};
+        let currentLayout = 1;
+        let globalChartDefinitions = [];
+
+        // Chart.js Settings
+        Chart.defaults.font.family = "'Inter', 'Noto Sans JP', sans-serif";
+        Chart.defaults.color = '#64748b';
+        Chart.defaults.scale.grid.color = '#f1f5f9';
+        Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(15, 23, 42, 0.9)';
+        Chart.defaults.plugins.tooltip.padding = 10;
+        Chart.defaults.plugins.tooltip.cornerRadius = 6;
+        
+        const COLORS = {
+            partner1: PARTNER_CONFIG.partner1.color, // Blue
+            partner2: PARTNER_CONFIG.partner2.color, // Rose
+            total: '#10b981', // Emerald
+            expense: '#f59e0b', // Amber
+            balance: '#6366f1', // Indigo
+            fixed: '#64748b', // Slate
+            variable: '#f97316', // Orange
+            palette: [
+                '#2563eb', '#e11d48', '#10b981', '#f59e0b', '#8b5cf6', 
+                '#06b6d4', '#f97316', '#64748b', '#ec4899', '#84cc16'
+            ]
+        };
+
+        // --- 2. Utility Functions ---
+        const cleanNum = (val) => {
+            if (val === null || val === undefined) return 0;
+            const s = String(val).replace(/[^-0-9.-]/g, ''); // Allow negative
+            const n = parseFloat(s);
+            return isNaN(n) ? 0 : n;
+        };
+
+        const formatShortNumber = (val) => {
+            if (val === null || val === undefined) return '';
+            if (typeof val !== 'number') return val;
+            const abs = Math.abs(val);
+            if (abs >= 100000000) return (val / 100000000).toFixed(1) + '億';
+            if (abs >= 10000) return (val / 10000).toFixed(0) + '万';
+            return val.toLocaleString();
+        };
+
+        const formatDate = (dateInput) => {
+            if (!dateInput) return null;
+            if (dateInput instanceof Date) return isNaN(dateInput.getTime()) ? null : dateInput;
+            const d = new Date(dateInput);
+            return isNaN(d.getTime()) ? null : d;
+        };
+
+        // --- 3. Main Logic ---
+        window.onload = () => {
+            lucide.createIcons();
+            document.getElementById('csvFileInputSplash').addEventListener('change', handleFile);
+            document.getElementById('csvFileInputHeader').addEventListener('change', handleFile);
+            
+            document.getElementById('btnLayout1').addEventListener('click', () => toggleLayout(1));
+            document.getElementById('btnLayout2').addEventListener('click', () => toggleLayout(2));
+            document.getElementById('btnExportPdf').addEventListener('click', exportPDF);
+            document.getElementById('btnExportJson').addEventListener('click', exportJSON);
+            
+            document.getElementById('filterDateStart').addEventListener('change', applyFilters);
+            document.getElementById('filterDateEnd').addEventListener('change', applyFilters);
+
+            initStickyNav();
+        };
+
+        function initStickyNav() {
+            const quickNav = document.getElementById('quickNav');
+            const stickyNav = document.getElementById('stickyNav');
+            
+            const observer = new IntersectionObserver(([entry]) => {
+                if (!entry.isIntersecting && entry.boundingClientRect.top < 0) {
+                    stickyNav.classList.remove('-translate-y-[150%]', 'opacity-0', 'pointer-events-none');
+                } else {
+                    stickyNav.classList.add('-translate-y-[150%]', 'opacity-0', 'pointer-events-none');
+                }
+            }, {
+                root: null,
+                threshold: 0, 
+                rootMargin: "-60px 0px 0px 0px"
+            });
+
+            if (quickNav) {
+                observer.observe(quickNav);
+            }
+        }
+
+        function toggleLayout(mode) {
+            currentLayout = mode;
+            const grid = document.getElementById('chartsGrid');
+            const btn1 = document.getElementById('btnLayout1');
+            const btn2 = document.getElementById('btnLayout2');
+            
+            if (mode === 1) {
+                grid.classList.remove('cols-2');
+                grid.classList.add('cols-1');
+                btn1.classList.add('text-rose-600', 'bg-white', 'shadow-sm');
+                btn1.classList.remove('text-slate-400');
+                btn2.classList.remove('text-rose-600', 'bg-white', 'shadow-sm');
+                btn2.classList.add('text-slate-400');
+            } else {
+                grid.classList.remove('cols-1');
+                grid.classList.add('cols-2');
+                btn2.classList.add('text-rose-600', 'bg-white', 'shadow-sm');
+                btn2.classList.remove('text-slate-400');
+                btn1.classList.remove('text-rose-600', 'bg-white', 'shadow-sm');
+                btn1.classList.add('text-slate-400');
+            }
+            Object.values(charts).forEach(c => c.resize());
+        }
+
+        function handleFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+            const fileName = file.name.toLowerCase();
+
+            if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, {type: 'array', cellDates: true});
+                        const sheetsData = { partner1: [], partner2: [], aggregate: [] };
+                        let hasMatched = false;
+
+                        console.log('📊 Excel Import: Found sheets:', workbook.SheetNames);
+                        console.log('🔍 Looking for sheets matching:', {
+                            partner1: `"${PARTNER_CONFIG.partner1.name}" or "partner1"`,
+                            partner2: `"${PARTNER_CONFIG.partner2.name}" or "partner2"`,
+                            aggregate: '"aggregate", "集計", or "全体"'
+                        });
+
+                        workbook.SheetNames.forEach(sheetName => {
+                            const lowerName = sheetName.toLowerCase();
+                            const worksheet = workbook.Sheets[sheetName];
+                            const json = XLSX.utils.sheet_to_json(worksheet);
+
+                            // Match sheet names using config or common keywords
+                            // Check aggregate FIRST to avoid conflicts with partner names that might be substrings
+                            if (lowerName.includes('aggregate') || lowerName.includes('集計') || lowerName.includes('全体')) {
+                                sheetsData.aggregate = json;
+                                hasMatched = true;
+                                console.log(`✅ Matched "${sheetName}" as aggregate sheet (${json.length} rows)`);
+                            } else if (lowerName.includes(PARTNER_CONFIG.partner1.name.toLowerCase()) || lowerName.includes('partner1')) {
+                                sheetsData.partner1 = json;
+                                hasMatched = true;
+                                console.log(`✅ Matched "${sheetName}" as partner1 sheet (${json.length} rows)`);
+                            } else if (lowerName.includes(PARTNER_CONFIG.partner2.name.toLowerCase()) || lowerName.includes('partner2')) {
+                                sheetsData.partner2 = json;
+                                hasMatched = true;
+                                console.log(`✅ Matched "${sheetName}" as partner2 sheet (${json.length} rows)`);
+                            } else {
+                                console.log(`⚠️ Sheet "${sheetName}" not matched to any category`);
+                            }
+                        });
+
+                        if (!hasMatched && workbook.SheetNames.length > 0) {
+                            const firstSheet = workbook.SheetNames[0];
+                            const json = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+                            sheetsData.aggregate = json;
+                            console.log(`ℹ️ No sheets matched keywords. Using first sheet "${firstSheet}" as aggregate (${json.length} rows)`);
+                        }
+
+                        console.log('📦 Final sheets data:', {
+                            partner1: `${sheetsData.partner1.length} rows`,
+                            partner2: `${sheetsData.partner2.length} rows`,
+                            aggregate: `${sheetsData.aggregate.length} rows`
+                        });
+
+                        processData(sheetsData);
+
+                    } catch (err) {
+                        console.error("❌ Excel Parse Error:", err);
+                        console.error("Error details:", {
+                            message: err.message,
+                            stack: err.stack,
+                            fileName: fileName
+                        });
+                        document.getElementById('loadingOverlay').classList.add('hidden');
+                        alert("Excelファイルの読み込みに失敗しました。");
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                console.log('📄 CSV Import: Attempting Shift_JIS encoding first');
+                Papa.parse(file, {
+                    header: true,
+                    skipEmptyLines: 'greedy', 
+                    encoding: 'Shift_JIS',
+                    complete: (results) => {
+                        const keys = results.meta.fields || Object.keys(results.data[0] || {});
+                        const p1 = PARTNER_CONFIG.partner1.name;
+                        const p2 = PARTNER_CONFIG.partner2.name;
+                        console.log('📋 CSV columns found:', keys);
+                        const hasKeywords = keys.some(k => 
+                            k.includes('収入') || k.includes(p1) || k.includes(p2)
+                        );
+                        if (!hasKeywords && keys.length > 0) {
+                            console.log('⚠️ No keywords matched with Shift_JIS. Retrying with UTF-8...');
+                            Papa.parse(file, {
+                                header: true, skipEmptyLines: 'greedy', encoding: 'UTF-8',
+                                complete: (resUTF) => {
+                                    const keysUTF = resUTF.meta.fields || Object.keys(resUTF.data[0] || {});
+                                    console.log('📋 CSV columns with UTF-8:', keysUTF);
+                                    console.log(`✅ Processing CSV data (${resUTF.data.length} rows)`);
+                                    processData(resUTF.data);
+                                }
+                            });
+                        } else {
+                            console.log(`✅ Processing CSV data with Shift_JIS (${results.data.length} rows)`);
+                            processData(results.data);
+                        }
+                    },
+                    error: (err) => {
+                        console.error("❌ CSV Parse Error", err);
+                        document.getElementById('loadingOverlay').classList.add('hidden');
+                        alert("CSVファイルの読み込みに失敗しました。");
+                    }
+                });
+            }
+        }
+
+        function processData(inputData) {
+            console.log('🔄 Processing data...');
+            
+            const getVal = (row, keyPart) => {
+                if (!row) return undefined;
+                const keys = Object.keys(row);
+                const found = keys.find(k => k.toLowerCase().includes(keyPart.toLowerCase()));
+                return found ? row[found] : undefined;
+            };
+
+            const getDateKey = (row) => {
+                const raw = getVal(row, 'Month') || getVal(row, '月') || getVal(row, 'Date');
+                const d = formatDate(raw);
+                return d ? d.toISOString().slice(0, 7) : null; 
+            };
+
+            const isMultiSheet = !Array.isArray(inputData) && (inputData.aggregate || inputData.partner1 || inputData.partner2);
+            const dateSet = new Set();
+            
+            if (isMultiSheet) {
+                console.log('📊 Multi-sheet mode detected');
+                console.log('  - Aggregate sheet:', inputData.aggregate?.length || 0, 'rows');
+                console.log('  - Partner1 sheet:', inputData.partner1?.length || 0, 'rows');
+                console.log('  - Partner2 sheet:', inputData.partner2?.length || 0, 'rows');
+                [inputData.aggregate, inputData.partner1, inputData.partner2].forEach(arr => {
+                    if(arr) arr.forEach(row => {
+                        const key = getDateKey(row);
+                        if(key) dateSet.add(key);
+                    });
+                });
+            } else {
+                console.log('📄 Single data array mode:', inputData.length, 'rows');
+                inputData.forEach(row => {
+                    const key = getDateKey(row);
+                    if(key) dateSet.add(key);
+                });
+            }
+
+            const sortedDates = Array.from(dateSet).sort();
+
+            rawData = sortedDates.map(dateKey => {
+                const date = new Date(dateKey + "-01");
+                
+                let rowA, rowK, rowM;
+
+                if (isMultiSheet) {
+                    rowA = inputData.aggregate?.find(r => getDateKey(r) === dateKey) || {};
+                    rowK = inputData.partner1?.find(r => getDateKey(r) === dateKey) || {};
+                    rowM = inputData.partner2?.find(r => getDateKey(r) === dateKey) || {};
+                } else {
+                    const row = inputData.find(r => getDateKey(r) === dateKey) || {};
+                    rowA = row; rowK = row; rowM = row;
+                }
+
+                // Partner 1 Stats (using config for column names)
+                const p1Name = PARTNER_CONFIG.partner1.name;
+                const p2Name = PARTNER_CONFIG.partner2.name;
+                
+                const incomeK = cleanNum(
+                    getVal(rowA, `収入${p1Name}`) || getVal(rowA, `収入_${p1Name}`) || 
+                    getVal(rowK, '収入') || getVal(rowK, 'Income')
+                );
+                const burdenK = cleanNum(
+                    getVal(rowA, `共通費の負担額_${p1Name}`) || 
+                    getVal(rowK, '共通費の負担額') || getVal(rowK, '家計負担')
+                );
+                const spendingK = cleanNum(getVal(rowK, '個人の支出') || getVal(rowK, '個人支出'));
+                const adjustment = cleanNum(
+                    getVal(rowK, `相殺用_${p2Name}->${p1Name}`) || 
+                    getVal(rowK, '精算')
+                ); 
+                const balanceK = incomeK - (burdenK + spendingK) + adjustment;
+                
+                const expenseTotalK = cleanNum(getVal(rowK, '支出総額') || getVal(rowK, 'TotalExpense')) || (burdenK + spendingK);
+                const cashK = cleanNum(getVal(rowK, '預金') || getVal(rowK, '現金') || getVal(rowK, 'Cash') || getVal(rowK, 'Deposit'));
+                const investK = cleanNum(getVal(rowK, '投資') || getVal(rowK, '株') || getVal(rowK, 'Investment') || getVal(rowK, 'Stock'));
+
+                // Partner 2 Stats (using config for column names)
+                const incomeM = cleanNum(
+                    getVal(rowA, `収入${p2Name}`) || getVal(rowA, `収入_${p2Name}`) || 
+                    getVal(rowM, '収入') || getVal(rowM, 'Income')
+                );
+                const burdenM = cleanNum(
+                    getVal(rowA, `共通費の負担額_${p2Name}`) || 
+                    getVal(rowM, '共通費の負担額') || getVal(rowM, '家計負担')
+                );
+                const spendingM = cleanNum(getVal(rowM, '個人の支出') || getVal(rowM, '個人支出'));
+                const balanceM = incomeM - (burdenM + spendingM) - adjustment; 
+
+                const expenseTotalM = cleanNum(getVal(rowM, '支出総額') || getVal(rowM, 'TotalExpense')) || (burdenM + spendingM);
+                const cashM = cleanNum(getVal(rowM, '預金') || getVal(rowM, '現金') || getVal(rowM, 'Cash') || getVal(rowM, 'Deposit'));
+                const investM = cleanNum(getVal(rowM, '投資') || getVal(rowM, '株') || getVal(rowM, 'Investment') || getVal(rowM, 'Stock'));
+
+                // Aggregate Stats
+                const incomeCommon = cleanNum(getVal(rowA, '収入総額') || getVal(rowA, 'TotalIncome')); 
+                const expenseTotal = expenseTotalK + expenseTotalM;
+                
+                const rent = cleanNum(getVal(rowK, '家賃')) + cleanNum(getVal(rowM, '家賃'));
+                const food = cleanNum(getVal(rowK, '食費')) + cleanNum(getVal(rowM, '食費'));
+                const utility = cleanNum(getVal(rowK, '光熱費')) + cleanNum(getVal(rowM, '光熱費'));
+                const internet = cleanNum(getVal(rowK, '通信費')) + cleanNum(getVal(rowM, '通信費'));
+                const furniture = cleanNum(getVal(rowK, '家具類')) + cleanNum(getVal(rowM, '家具類'));
+                const entPair = cleanNum(getVal(rowK, '２人での娯楽')) + cleanNum(getVal(rowM, '２人での娯楽'));
+                
+                const other = Math.max(0, expenseTotal - (rent + food + utility + internet + furniture + entPair));
+                const balanceCommon = incomeCommon - expenseTotal;
+
+                const assetsTotal = cleanNum(getVal(rowA, '二人での資産総額') || getVal(rowA, '総資産'));
+                const cashTotal = cleanNum(getVal(rowA, '預金総額'));
+                const investTotal = cleanNum(getVal(rowA, '投資評価額'));
+
+                const assetsK = cleanNum(
+                    getVal(rowA, `資産総額_${p1Name}`) || 
+                    getVal(rowA, `Assets${p1Name}`)
+                );
+                const assetsM = cleanNum(
+                    getVal(rowA, `資産総額_${p2Name}`) || 
+                    getVal(rowA, `Assets${p2Name}`)
+                );
+                const adjustmentA = cleanNum(
+                    getVal(rowA, `相殺用_${p2Name}->${p1Name}`) || 
+                    getVal(rowA, '精算')
+                );
+
+                return {
+                    date,
+                    k: { income: incomeK, burden: burdenK, spending: spendingK, balance: balanceK, cash: cashK, invest: investK },
+                    m: { income: incomeM, burden: burdenM, spending: spendingM, balance: balanceM, cash: cashM, invest: investM },
+                    a: { 
+                        income: incomeCommon, expense: expenseTotal, balance: balanceCommon,
+                        rent, food, utility, internet, furniture, entPair, other,
+                        assets: assetsTotal, cash: cashTotal, invest: investTotal,
+                        assetsK, assetsM, adjustment: adjustmentA
+                    },
+                    adjustment: adjustmentA
+                };
+            }).filter(d => {
+                if (!d.date) return false;
+                const hasData = d.k.income !== 0 || d.m.income !== 0 || d.a.assets !== 0 || d.a.expense !== 0;
+                return hasData;
+            });
+
+            rawData.sort((a, b) => a.date - b.date);
+
+            document.getElementById('initialSplash').classList.add('hidden');
+            document.getElementById('appHeader').classList.remove('hidden');
+            document.getElementById('dashboardContent').classList.remove('hidden');
+            
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const startStr = document.getElementById('filterDateStart').value;
+            const endStr = document.getElementById('filterDateEnd').value;
+            const start = startStr ? new Date(startStr + "-01") : null;
+            const end = endStr ? new Date(endStr + "-31") : null;
+
+            filteredData = rawData.filter(d => {
+                if (start && d.date < start) return false;
+                if (end && d.date > end) return false;
+                return true;
+            });
+
+            updateKPIs();
+            renderCharts();
+            generateAIInsight();
+        }
+
+        function updateKPIs() {
+            const sum = (fn) => filteredData.reduce((acc, d) => acc + fn(d), 0);
+            
+            const income = sum(d => d.a.income);
+            const expense = sum(d => d.a.expense);
+            const balance = income - expense;
+            const last = filteredData[filteredData.length - 1] || { a: { assets: 0 } };
+            
+            document.getElementById('kpi-assets').textContent = formatShortNumber(last.a.assets);
+            document.getElementById('kpi-income').textContent = formatShortNumber(income);
+            document.getElementById('kpi-expense').textContent = formatShortNumber(expense);
+            document.getElementById('kpi-balance').textContent = formatShortNumber(balance);
+            document.getElementById('kpi-rate').textContent = income ? ((balance/income)*100).toFixed(1) + '%' : '-';
+        }
+
+        function renderCharts() {
+            const container = document.getElementById('chartsGrid');
+            container.innerHTML = '';
+            charts = {};
+            const labels = filteredData.map(d => d.date.toISOString().slice(0, 7));
+
+            const accumulate = (dataArr) => {
+                let sum = 0;
+                return dataArr.map(v => sum += v);
+            };
+
+            globalChartDefinitions = [
+                // 1. 世帯総資産の成長トレンド (Area)
+                {
+                    id: 'c1', title: '世帯総資産の成長トレンド', type: 'line',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: '総資産', data: filteredData.map(d => d.a.assets), borderColor: COLORS.total, backgroundColor: COLORS.total+'20', fill: true }
+                        ]
+                    }
+                },
+                // 2. 家計簿収支 (収入 vs 支出) (Combo)
+                {
+                    id: 'c2', title: '家計簿収支 (収入 vs 支出)', type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: '家計収入', data: filteredData.map(d => d.a.income), backgroundColor: COLORS.total, order: 2 },
+                            { label: '家計支出', data: filteredData.map(d => -Math.abs(d.a.expense)), backgroundColor: COLORS.expense, order: 2 },
+                            { label: '家計残高', data: filteredData.map(d => d.a.balance), type: 'line', borderColor: COLORS.balance, tension: 0.3, order: 1 }
+                        ]
+                    },
+                    options: {
+                        plugins: {
+                            datalabels: { formatter: (v) => formatShortNumber(Math.abs(v)) },
+                            tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + formatShortNumber(Math.abs(c.raw)) } }
+                        }
+                    }
+                },
+                // 3. 費目別支出の積み上げ推移 (Stacked Area)
+                {
+                    id: 'c3', title: '費目別支出の積み上げ推移', type: 'line',
+                    showLegend: true, 
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: '家賃', data: filteredData.map(d => d.a.rent), fill: true, backgroundColor: COLORS.fixed, borderColor: COLORS.fixed, stack: 's1' },
+                            { label: '食費', data: filteredData.map(d => d.a.food), fill: true, backgroundColor: COLORS.palette[1], borderColor: COLORS.palette[1], stack: 's1' },
+                            { label: '光熱費', data: filteredData.map(d => d.a.utility), fill: true, backgroundColor: COLORS.palette[9], borderColor: COLORS.palette[9], stack: 's1' },
+                            { label: '通信費', data: filteredData.map(d => d.a.internet), fill: true, backgroundColor: COLORS.palette[4], borderColor: COLORS.palette[4], stack: 's1' },
+                            { label: '娯楽(2人)', data: filteredData.map(d => d.a.entPair), fill: true, backgroundColor: COLORS.palette[6], borderColor: COLORS.palette[6], stack: 's1' },
+                            { label: '家具類', data: filteredData.map(d => d.a.furniture), fill: true, backgroundColor: COLORS.palette[5], borderColor: COLORS.palette[5], stack: 's1' },
+                            { label: 'その他個人等', data: filteredData.map(d => d.a.other), fill: true, backgroundColor: COLORS.palette[7], borderColor: COLORS.palette[7], stack: 's1' }
+                        ]
+                    }
+                },
+                // 4. 家計黒字率 (貯蓄率) の推移 (Line)
+                {
+                    id: 'c4', title: '家計黒字率 (貯蓄率) の推移', type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{ 
+                            label: '黒字率(%)', 
+                            data: filteredData.map(d => d.a.income ? (d.a.balance / d.a.income * 100) : 0),
+                            borderColor: COLORS.balance, tension: 0.3
+                        }]
+                    }
+                },
+                // 7. 個人の「自由に使えるお金」比較 (Bar)
+                {
+                    id: 'c7', title: '個人の余剰資金(貯蓄)比較', type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: `${PARTNER_CONFIG.partner1.displayName}余剰`, data: filteredData.map(d => d.k.income - (d.k.burden + d.k.spending)), backgroundColor: COLORS.partner1 },
+                            { label: `${PARTNER_CONFIG.partner2.displayName}余剰`, data: filteredData.map(d => d.m.income - (d.m.burden + d.m.spending)), backgroundColor: COLORS.partner2 }
+                        ]
+                    }
+                },
+                // 9. Partner 1 マネーフロー (Combo: Income vs Expense Stack)
+                {
+                    id: 'c9', title: `${PARTNER_CONFIG.partner1.displayName} マネーフロー (収入 vs 支出・貯蓄)`, type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            { 
+                                label: '収入', 
+                                data: filteredData.map(d => d.k.income), 
+                                backgroundColor: COLORS.partner1, 
+                                order: 3 
+                            },
+                            { 
+                                label: '家計負担', 
+                                data: filteredData.map(d => -Math.abs(d.k.burden)), 
+                                backgroundColor: COLORS.fixed, 
+                                stack: 'expense', 
+                                order: 2 
+                            },
+                            { 
+                                label: '個人支出', 
+                                data: filteredData.map(d => -Math.abs(d.k.spending)), 
+                                backgroundColor: COLORS.variable, 
+                                stack: 'expense', 
+                                order: 2 
+                            },
+                            { 
+                                label: '残高(貯蓄)', 
+                                data: filteredData.map(d => d.k.balance), 
+                                type: 'line', 
+                                borderColor: COLORS.balance, 
+                                tension: 0.3, 
+                                pointBackgroundColor: '#fff',
+                                pointBorderWidth: 2,
+                                order: 1 
+                            }
+                        ]
+                    },
+                    options: {
+                        scales: {
+                            x: { stacked: true },
+                            y: { 
+                                stacked: false,
+                                grid: {
+                                    color: (ctx) => ctx.tick.value === 0 ? '#334155' : '#f1f5f9',
+                                    lineWidth: (ctx) => ctx.tick.value === 0 ? 2 : 1
+                                }
+                            }
+                        },
+                        plugins: {
+                            datalabels: { 
+                                formatter: (v) => formatShortNumber(Math.abs(v)) 
+                            },
+                            tooltip: { 
+                                callbacks: { 
+                                    label: (c) => c.dataset.label + ': ' + formatShortNumber(Math.abs(c.raw)) 
+                                } 
+                            }
+                        }
+                    }
+                },
+                // 11. パートナー別 資産総額推移 (Line Integrated)
+                {
+                    id: 'c11', title: 'パートナー別 資産総額推移', type: 'line',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: `${PARTNER_CONFIG.partner1.displayName}資産`, data: filteredData.map(d => d.a.assetsK), borderColor: COLORS.partner1, tension: 0.3 },
+                            { label: `${PARTNER_CONFIG.partner2.displayName}資産`, data: filteredData.map(d => d.a.assetsM), borderColor: COLORS.partner2, tension: 0.3 }
+                        ]
+                    }
+                },
+                // 12. Partner 1 変動費推移 (Bar)
+                {
+                    id: 'c12', title: `${PARTNER_CONFIG.partner1.displayName} 個人支出推移`, type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{ label: '個人支出', data: filteredData.map(d => d.k.spending), backgroundColor: COLORS.variable }]
+                    }
+                },
+                // 13. Partner 2 マネーフロー (Combo: Income vs Expense Stack)
+                {
+                    id: 'c13', title: `${PARTNER_CONFIG.partner2.displayName} マネーフロー (収入 vs 支出・貯蓄)`, type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            { 
+                                label: '収入', 
+                                data: filteredData.map(d => d.m.income), 
+                                backgroundColor: COLORS.partner2, 
+                                order: 3 
+                            },
+                            { 
+                                label: '家計負担', 
+                                data: filteredData.map(d => -Math.abs(d.m.burden)), 
+                                backgroundColor: COLORS.fixed, 
+                                stack: 'expense', 
+                                order: 2 
+                            },
+                            { 
+                                label: '個人支出', 
+                                data: filteredData.map(d => -Math.abs(d.m.spending)), 
+                                backgroundColor: COLORS.expense, 
+                                stack: 'expense', 
+                                order: 2 
+                            },
+                            { 
+                                label: '残高(貯蓄)', 
+                                data: filteredData.map(d => d.m.balance), 
+                                type: 'line', 
+                                borderColor: COLORS.balance, 
+                                tension: 0.3, 
+                                pointBackgroundColor: '#fff',
+                                pointBorderWidth: 2,
+                                order: 1 
+                            }
+                        ]
+                    },
+                    options: {
+                        scales: {
+                            x: { stacked: true },
+                            y: { 
+                                stacked: false,
+                                grid: {
+                                    color: (ctx) => ctx.tick.value === 0 ? '#334155' : '#f1f5f9',
+                                    lineWidth: (ctx) => ctx.tick.value === 0 ? 2 : 1
+                                }
+                            }
+                        },
+                        plugins: {
+                            datalabels: { 
+                                formatter: (v) => formatShortNumber(Math.abs(v)) 
+                            },
+                            tooltip: { 
+                                callbacks: { 
+                                    label: (c) => c.dataset.label + ': ' + formatShortNumber(Math.abs(c.raw)) 
+                                } 
+                            }
+                        }
+                    }
+                },
+                // 16. Partner 2 変動費推移
+                {
+                    id: 'c16', title: `${PARTNER_CONFIG.partner2.displayName} 個人支出推移`, type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{ label: '個人支出', data: filteredData.map(d => d.m.spending), backgroundColor: COLORS.expense }]
+                    }
+                },
+                // 17. 精算額 (Waterfall-ish Bar) - Use Aggregate's Adjustment
+                {
+                    id: 'c17', title: `パートナー間 精算額 (${PARTNER_CONFIG.partner2.displayName}→${PARTNER_CONFIG.partner1.displayName})`, type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{ 
+                            label: '精算額', 
+                            data: filteredData.map(d => d.a.adjustment),
+                            backgroundColor: filteredData.map(d => d.a.adjustment >= 0 ? COLORS.partner2 : COLORS.partner1)
+                        }]
+                    }
+                },
+                // 18. エンゲル係数
+                {
+                    id: 'c18', title: 'エンゲル係数(食費率)の推移', type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: '係数(%)',
+                            data: filteredData.map(d => d.a.expense ? (d.a.food / d.a.expense * 100) : 0),
+                            borderColor: COLORS.palette[1], tension: 0.3
+                        }]
+                    }
+                },
+                // 19. 通信費推移
+                {
+                    id: 'c19', title: '通信費・ネット代の推移', type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: '通信費計',
+                            data: filteredData.map(d => d.a.internet + d.a.utility), 
+                            borderColor: COLORS.palette[4], tension: 0.1
+                        }]
+                    }
+                },
+                // 20. 家計健全度スコア (Radar)
+                {
+                    id: 'c20', title: '家計健全度スコア', type: 'radar',
+                    data: {
+                        labels: ['貯蓄率', '固定費率', '個人支出率', '投資比率', '収支安定性'],
+                        datasets: [{
+                            label: 'スコア',
+                            data: (() => {
+                                const l = filteredData[filteredData.length-1];
+                                if(!l) return [0,0,0,0,0];
+                                const inc = l.a.income || 1;
+                                const saveRate = Math.min(100, (l.a.balance / inc) * 100);
+                                const fixedRate = Math.min(100, ((l.a.rent + l.a.utility) / inc) * 100); // Lower is better
+                                const persRate = Math.min(100, ((l.k.spending + l.m.spending) / (l.k.income + l.m.income)) * 100); // Lower is better
+                                const invRate = Math.min(100, (l.a.invest / (l.a.assets||1)) * 100);
+                                return [
+                                    saveRate, 
+                                    100 - fixedRate, 
+                                    100 - persRate, 
+                                    invRate, 
+                                    l.a.balance > 0 ? 100 : 50
+                                ];
+                            })(),
+                            backgroundColor: COLORS.total+'40',
+                            borderColor: COLORS.total
+                        }]
+                    },
+                    options: { scales: { r: { min: 0, max: 100 } } }
+                },
+                // 21. Partner 1 資産ポートフォリオ (Stacked Bar with Ratio)
+                {
+                    id: 'c21', title: `${PARTNER_CONFIG.partner1.displayName} 資産ポートフォリオ (現金 vs 投資)`, type: 'bar',
+                    showLegend: true, // Show Legend
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: '預金(現金)', data: filteredData.map(d => d.k.cash), backgroundColor: '#0ea5e9', stack: 'stack1', order: 2 },
+                            { label: '投資', data: filteredData.map(d => d.k.invest), backgroundColor: '#f59e0b', stack: 'stack1', order: 3 },
+                            {
+                                type: 'line', label: '現金比率',
+                                data: filteredData.map(d => d.k.cash + d.k.invest), 
+                                backgroundColor: 'transparent', borderColor: 'transparent', pointRadius: 0,
+                                order: 1, 
+                                datalabels: {
+                                    align: 'end', anchor: 'end',
+                                    offset: -5,
+                                    color: '#1e293b', 
+                                    font: { weight: 'bold', size: 11 },
+                                    backgroundColor: 'rgba(255,255,255,0.8)', 
+                                    borderRadius: 4,
+                                    formatter: (val, ctx) => {
+                                        const idx = ctx.dataIndex;
+                                        const d = filteredData[idx].k;
+                                        const total = d.cash + d.invest;
+                                        return total > 0 ? '現金 ' + (d.cash / total * 100).toFixed(0) + '%' : '';
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    options: { 
+                        scales: { x: { stacked: true }, y: { stacked: true } },
+                        layout: { padding: { top: 25 } }
+                    }
+                },
+                // 22. Partner 2 資産ポートフォリオ (Stacked Bar with Ratio)
+                {
+                    id: 'c22', title: `${PARTNER_CONFIG.partner2.displayName} 資産ポートフォリオ (現金 vs 投資)`, type: 'bar',
+                    showLegend: true, // Show Legend
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: '預金(現金)', data: filteredData.map(d => d.m.cash), backgroundColor: '#0ea5e9', stack: 'stack1', order: 2 },
+                            { label: '投資', data: filteredData.map(d => d.m.invest), backgroundColor: '#f59e0b', stack: 'stack1', order: 3 },
+                            {
+                                type: 'line', label: '現金比率',
+                                data: filteredData.map(d => d.m.cash + d.m.invest), 
+                                backgroundColor: 'transparent', borderColor: 'transparent', pointRadius: 0,
+                                order: 1,
+                                datalabels: {
+                                    align: 'end', anchor: 'end',
+                                    offset: -5,
+                                    color: '#1e293b', 
+                                    font: { weight: 'bold', size: 11 },
+                                    backgroundColor: 'rgba(255,255,255,0.8)', 
+                                    borderRadius: 4,
+                                    formatter: (val, ctx) => {
+                                        const idx = ctx.dataIndex;
+                                        const d = filteredData[idx].m;
+                                        const total = d.cash + d.invest;
+                                        return total > 0 ? '現金 ' + (d.cash / total * 100).toFixed(0) + '%' : '';
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    options: { 
+                        scales: { x: { stacked: true }, y: { stacked: true } },
+                        layout: { padding: { top: 25 } }
+                    }
+                },
+                // 23. パートナー別 現金保有率の推移 (NEW)
+                {
+                    id: 'c23', title: 'パートナー別 現金保有率の推移', type: 'line',
+                    data: {
+                        labels,
+                        datasets: [
+                            {
+                                label: `${PARTNER_CONFIG.partner1.displayName}現金率`,
+                                data: filteredData.map(d => {
+                                    const total = d.k.cash + d.k.invest;
+                                    return total > 0 ? (d.k.cash / total * 100) : 0;
+                                }),
+                                borderColor: COLORS.partner1, tension: 0.3
+                            },
+                            {
+                                label: `${PARTNER_CONFIG.partner2.displayName}現金率`,
+                                data: filteredData.map(d => {
+                                    const total = d.m.cash + d.m.invest;
+                                    return total > 0 ? (d.m.cash / total * 100) : 0;
+                                }),
+                                borderColor: COLORS.partner2, tension: 0.3
+                            }
+                        ]
+                    },
+                    options: {
+                        scales: { y: { min: 0, max: 100, title: { display: true, text: '%' } } },
+                        plugins: {
+                            tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + c.raw.toFixed(1) + '%' } },
+                            datalabels: { display: false } 
+                        }
+                    }
+                }
+            ];
+
+            // Render
+            globalChartDefinitions.forEach(def => {
+                try {
+                    const div = document.createElement('div');
+                    div.className = 'chart-card';
+                    div.id = def.id; 
+                    div.innerHTML = `
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                <span class="w-1 h-4 bg-rose-500 rounded-full"></span>
+                                ${def.title}
+                            </h4>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="canvas_${def.id}"></canvas>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                    const ctx = document.getElementById(`canvas_${def.id}`).getContext('2d');
+                    
+                    const config = {
+                        type: def.type,
+                        data: def.data,
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { 
+                                    // Use explicit flag if present, otherwise default logic
+                                    display: def.showLegend !== undefined ? def.showLegend : (def.type !== 'bar' && def.type !== 'line'), 
+                                    position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } 
+                                },
+                                datalabels: {
+                                    display: (ctx) => {
+                                        if (def.id === 'c21' || def.id === 'c22') {
+                                            return ctx.dataset.type === 'line' || (ctx.chart.width > 300 && ctx.dataset.data.length < 12);
+                                        }
+                                        return ctx.dataset.data.length < 12 && ctx.chart.width > 300 && def.type !== 'line' && def.type !== 'radar'; 
+                                    },
+                                    color: '#fff',
+                                    font: { weight: 'bold', size: 9 },
+                                    formatter: (v) => formatShortNumber(Math.abs(v)),
+                                    textShadowColor: 'rgba(0,0,0,0.5)', textShadowBlur: 2
+                                }
+                            },
+                            ...def.options
+                        }
+                    };
+                    
+                    if (def.type === 'bar' || def.type === 'line') {
+                        if (!config.options.scales) config.options.scales = {};
+                        if (!config.options.scales.y) config.options.scales.y = {};
+                        config.options.scales.y.beginAtZero = true;
+                        config.options.scales.y.ticks = { callback: (v) => formatShortNumber(Math.abs(v)) };
+                    }
+                    if (def.id === 'c2') {
+                        config.options.scales.x = { stacked: true };
+                        config.options.scales.y.stacked = false; 
+                    }
+                    if (def.id === 'c3' || def.id === 'c9' || def.id === 'c13' || def.id === 'c21' || def.id === 'c22') {
+                        config.options.scales.x = { stacked: true };
+                        config.options.scales.y = { stacked: true, ticks: { callback: (v) => formatShortNumber(v) } };
+                    }
+
+                    charts[def.id] = new Chart(ctx, config);
+                } catch (e) {
+                    console.error(`Chart ${def.id} Error:`, e);
+                }
+            });
+            console.log(`✅ Data processing complete: ${rawData.length} months loaded`);
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
+
+        async function generateAIInsight() {
+            const contentDiv = document.getElementById('aiContent');
+            const statusBadge = document.getElementById('aiStatusBadge');
+            if (filteredData.length === 0) return;
+            statusBadge.classList.remove('hidden');
+            statusBadge.innerHTML = '<span class="animate-ping inline-flex h-2 w-2 rounded-full bg-rose-400 opacity-75 mr-2"></span>Thinking...';
+            contentDiv.innerHTML = '<div class="space-y-3 animate-pulse"><div class="h-4 bg-slate-100 rounded w-3/4"></div></div>';
+
+            const sum = (fn) => filteredData.reduce((a, d) => a + fn(d), 0);
+            const kpi = {
+                inc: sum(d => d.a.income),
+                exp: sum(d => d.a.expense),
+                bal: sum(d => d.a.balance),
+                kBal: sum(d => d.k.balance),
+                mBal: sum(d => d.m.balance)
+            };
+
+            const prompt = `
+            ファイナンシャルプランナーとして、以下の3層構造家計簿データを分析し、アドバイスを作成してください。
+            
+            ## データ要約
+            - 家計全体: 収入${formatShortNumber(kpi.inc)} / 支出${formatShortNumber(kpi.exp)} / 残高${formatShortNumber(kpi.bal)}
+            - ${PARTNER_CONFIG.partner1.displayName}個人: 累積貯蓄${formatShortNumber(kpi.kBal)}
+            - ${PARTNER_CONFIG.partner2.displayName}個人: 累積貯蓄${formatShortNumber(kpi.mBal)}
+
+            ## レポート要件 (Markdown)
+            1. **全体・個人の資産形成評価**
+               - 家計の黒字状況と、${PARTNER_CONFIG.partner1.displayName}/${PARTNER_CONFIG.partner2.displayName}個人の貯蓄ペースの比較評価
+            2. **改善アクション**
+               - 固定費、個人支出、投資バランスに関する具体的提言3点
+            
+            ※見出しに数値を含めないでください。強調は **bold** を使用。
+            `;
+
+            try {
+                const fetchAI = async (retry=3) => {
+                    for(let i=0; i<retry; i++){
+                        try {
+                            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                                method: 'POST', headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                            });
+                            if(!res.ok) throw new Error(res.status);
+                            const d = await res.json();
+                            if(d.candidates && d.candidates[0].content.parts[0].text) return d;
+                        } catch(e) { await new Promise(r=>setTimeout(r, 1000*2**i)); }
+                    }
+                    throw new Error("AI Failed");
+                };
+                
+                const data = await fetchAI();
+                const md = data.candidates[0].content.parts[0].text;
+                contentDiv.innerHTML = marked.parse(md).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                statusBadge.innerHTML = '<i data-lucide="check" class="w-3 h-3 mr-1"></i>Completed';
+                statusBadge.classList.replace('text-rose-600', 'text-green-600');
+                statusBadge.classList.replace('bg-white', 'bg-green-50');
+                lucide.createIcons();
+            } catch (e) {
+                console.error(e);
+                contentDiv.innerHTML = `<div class="text-red-500">AI分析エラー</div>`;
+                statusBadge.classList.add('hidden');
+            }
+        }
+
+        async function exportPDF() {
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const charts = Array.from(document.querySelectorAll('.chart-card'));
+            let y = 10, p = 0;
+            
+            // Title
+            pdf.setFontSize(14);
+            pdf.text(`Household Report - ${new Date().toLocaleDateString()}`, 10, y);
+            y += 10;
+
+            // KPI
+            const kpi = await html2canvas(document.getElementById('kpiSection'), {scale: 2});
+            pdf.addImage(kpi.toDataURL('image/jpeg', 0.8), 'JPEG', 10, y, 190, (kpi.height*190)/kpi.width);
+            y += (kpi.height*190)/kpi.width + 10;
+
+            // Charts
+            for(let i=0; i<charts.length; i++) {
+                if(y > 200) { pdf.addPage(); y = 10; }
+                const c = await html2canvas(charts[i], {scale: 2});
+                const h = (c.height*90)/c.width; // 2 col width approx
+                const w = 90; 
+                const x = (i%2 === 0) ? 10 : 110;
+                if(i%2 === 0 && i!==0 && y > 200) { pdf.addPage(); y=10; } // New page logic simplified
+                
+                // Simple list layout for PDF reliability
+                const fullW = 190;
+                const fullH = (c.height*fullW)/c.width;
+                if(y + fullH > 280) { pdf.addPage(); y = 10; }
+                pdf.addImage(c.toDataURL('image/jpeg', 0.8), 'JPEG', 10, y, fullW, fullH);
+                y += fullH + 5;
+            }
+            pdf.save('Household_Report.pdf');
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
+
+        function exportJSON() {
+            const blob = new Blob([JSON.stringify(filteredData, null, 2)], {type: 'application/json'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'household_data.json';
+            a.click();
+        }
+    </script>
+</body>
+</html>
