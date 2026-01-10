@@ -751,6 +751,8 @@
                 const internet = cleanNum(getVal(rowK, '通信費')) + cleanNum(getVal(rowM, '通信費'));
                 const furniture = cleanNum(getVal(rowK, '家具類')) + cleanNum(getVal(rowM, '家具類'));
                 const entPair = cleanNum(getVal(rowK, '２人での娯楽')) + cleanNum(getVal(rowM, '２人での娯楽'));
+                const commonExpense = cleanNum(getVal(rowA, '共通費合計') || getVal(rowA, '共通支出合計'));
+                const livingCost = commonExpense - (furniture + entPair);
                 
                 const other = Math.max(0, expenseTotal - (rent + food + utility + internet + furniture + entPair));
                 const balanceCommon = incomeCommon - expenseTotal;
@@ -779,6 +781,7 @@
                     a: { 
                         income: incomeCommon, expense: expenseTotal, balance: balanceCommon,
                         rent, food, utility, internet, furniture, entPair, other,
+                        livingCost,
                         assets: assetsTotal, cash: cashTotal, invest: investTotal,
                         assetsK, assetsM, adjustment: adjustmentA
                     },
@@ -888,7 +891,17 @@
                         ]
                     }
                 },
-                // 4. 家計黒字率 (貯蓄率) の推移 (Line)
+                // 4. 生活費の推移 (Line)
+                {
+                    id: 'c24', title: '生活費', type: 'line',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: '生活費', data: filteredData.map(d => d.a.livingCost), borderColor: COLORS.fixed, backgroundColor: COLORS.fixed + '20', fill: true, tension: 0.3 }
+                        ]
+                    }
+                },
+                // 5. 家計黒字率 (貯蓄率) の推移 (Line)
                 {
                     id: 'c4', title: '家計黒字率 (貯蓄率) の推移', type: 'line',
                     data: {
